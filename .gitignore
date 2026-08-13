@@ -1,0 +1,44 @@
+## .NET / Visual Studio
+
+bin/
+obj/
+*.user
+.vs/
+
+# Build results
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+[Bb]uild/
+
+# Visual Studio cache/options
+*.suo
+*.userosscache
+*.sln.docstates
+*.userprefs
+
+# Rider
+.idea/
+
+# VS Code
+.vscode/
+
+# WebView2 런타임이 실행 시 생성하는 프로필 데이터 (로그인 세션/쿠키/캐시 등)
+**/WebView2Profiles/
+*.WebView2/
+
+# NuGet
+*.nupkg
+**/packages/
+project.lock.json
+project.fragment.lock.json
+artifacts/
+
+# OS
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# Logs
+*.log

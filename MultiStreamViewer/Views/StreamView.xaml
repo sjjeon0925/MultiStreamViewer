@@ -1,0 +1,71 @@
+﻿<UserControl x:Class="MultiStreamViewer.Views.StreamView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:wv2="clr-namespace:Microsoft.Web.WebView2.Wpf;assembly=Microsoft.Web.WebView2.Wpf"
+             Background="#111111">
+
+    <Grid>
+
+        <!-- 웹 페이지 / 방송 영역 -->
+        <wv2:WebView2
+            x:Name="Browser"
+            HorizontalAlignment="Stretch"
+            VerticalAlignment="Stretch">
+        </wv2:WebView2>
+
+
+        <!-- 하단 정보 -->
+        <Border Height="34"
+                VerticalAlignment="Bottom"
+                Background="#DD111111">
+
+            <Grid>
+
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+
+                <!-- 슬롯 / 플랫폼 -->
+                <StackPanel Grid.Column="0"
+                            Orientation="Horizontal"
+                            VerticalAlignment="Center"
+                            Margin="10,0">
+
+                    <TextBlock x:Name="StreamTitle"
+                               Text="슬롯 1"
+                               Foreground="#EEEEEE"
+                               FontSize="12"
+                               VerticalAlignment="Center"/>
+
+                    <TextBlock Text="  •  "
+                               Foreground="#555555"
+                               FontSize="12"
+                               VerticalAlignment="Center"/>
+
+                    <TextBlock x:Name="PlatformText"
+                               Text="대기"
+                               Foreground="#999999"
+                               FontSize="12"
+                               VerticalAlignment="Center"/>
+
+                </StackPanel>
+
+
+                <!-- 상태 -->
+                <TextBlock x:Name="StreamStatus"
+                           Grid.Column="1"
+                           Text="준비됨"
+                           Foreground="#888888"
+                           FontSize="11"
+                           VerticalAlignment="Center"
+                           Margin="0,0,10,0"/>
+
+            </Grid>
+
+        </Border>
+
+    </Grid>
+
+</UserControl>

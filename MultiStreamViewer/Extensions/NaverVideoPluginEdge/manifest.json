@@ -1,0 +1,25 @@
+{
+   "background": {
+      "service_worker": "background.js"
+   },
+   "content_scripts": [ {
+      "all_frames": true,
+      "js": [ "content.js" ],
+      "matches": [ "https://chzzk.naver.com/*", "http://*.navercorp.com/*", "https://*.navercorp.com/*", "https://*.naver.com/*" ],
+      "run_at": "document_start"
+   } ],
+   "description": "네이버 동영상 서비스 이용을 위한 확장 프로그램",
+   "externally_connectable": {
+      "matches": [ "https://chzzk.naver.com/*", "http://*.navercorp.com/*", "https://*.navercorp.com/*", "https://*.naver.com/*" ]
+   },
+   "host_permissions": [ "https://chzzk.naver.com/*", "http://*.navercorp.com/*", "https://*.navercorp.com/*", "https://*.naver.com/*" ],
+   "icons": {
+      "128": "icon.png"
+   },
+   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAsO4qvlBVPHUzmU+4ZvjDvYAjDwHBiOVY5fsnic6+6DowAGUGHlT59+rIoBqAyEze2eDOWSjM+Lf/M78Q9LRUP7F1VgPJc5O2J22bhEXi0wQcTD+EJ/di2UMM9vhSWiSWXLoasgDwS+YqgM9PDwKj/vB4C6LemQom7V/iPCwFqscwdxWdAI7eIkyPbUCa9Y72SEu2iigw1xk0T1ZlldYt32ic9prEom0vRKe4YTnMQraCOVR+YZwFlVheQMIFYRtDophg2VWRIQc3xWgz2LAKKbJYof0mJMt/puD3n+DvzkO/tyvCiwfGmrhsnX8Uxdtx9FvRcjnzqAnIoxCXmwBiwQIDAQAB",
+   "manifest_version": 3,
+   "name": "네이버 동영상 플러그인",
+   "permissions": [ "activeTab", "nativeMessaging" ],
+   "update_url": "https://edge.microsoft.com/extensionwebstorebase/v1/crx",
+   "version": "1.0.2.4"
+}
