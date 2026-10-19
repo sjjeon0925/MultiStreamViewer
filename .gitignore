@@ -5,6 +5,9 @@ obj/
 *.user
 .vs/
 
+# Visual Studio 게시 프로필 (로컬 출력 경로 등 개인 설정 포함)
+**/Properties/PublishProfiles/
+
 # Build results
 [Dd]ebug/
 [Rr]elease/

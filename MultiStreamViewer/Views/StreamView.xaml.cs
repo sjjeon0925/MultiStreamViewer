@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
@@ -72,6 +73,10 @@ public partial class StreamView : UserControl
                 System.Diagnostics.Debug.WriteLine(
                     $"[권한 요청] kind={args.PermissionKind}, uri={args.Uri}, userInitiated={args.IsUserInitiated}, before={args.State}");
 
+                // CHZZK 외 사이트의 요청은 건드리지 않고 WebView2 기본 동작에 맡긴다.
+                if (!IsChzzkUri(args.Uri))
+                    return;
+
                 args.State = CoreWebView2PermissionState.Allow;
                 args.SavesInProfile = true;
 
@@ -95,6 +100,10 @@ public partial class StreamView : UserControl
                 $"WebView2 초기화 오류: {ex}");
         }
     }
+
+    private static bool IsChzzkUri(string uri) =>
+        Uri.TryCreate(uri, UriKind.Absolute, out Uri? parsed) &&
+        PlatformDetector.Detect(parsed.AbsoluteUri) == "CHZZK";
 
     // navigator.permissions.query({name:'local-network-access'})가 'prompt'를 반환하는 걸로
     // 봐서 이 Chromium 엔진은 LNA를 정식으로 지원하지만, WebView2의 PermissionRequested
@@ -157,27 +166,31 @@ public partial class StreamView : UserControl
                     .Select(e => e.Id)
                     .ToHashSet();
 
-            foreach (string pluginDir in Directory.GetDirectories(extensionsRoot))
+            // WebView2는 Edge 기반이므로 Edge용 확장만 설치한다.
+            // (Chrome용을 같이 설치하면 같은 사이트에 content script가 중복 주입된다.)
+            string pluginDir = Path.Combine(extensionsRoot, "NaverVideoPluginEdge");
+
+            if (Directory.Exists(pluginDir))
             {
                 string manifestPath =
                     Path.Combine(pluginDir, "manifest.json");
 
-                if (!File.Exists(manifestPath))
-                    continue;
-
-                try
+                if (File.Exists(manifestPath))
                 {
-                    var extensionInfo =
-                        await Browser.CoreWebView2.Profile.AddBrowserExtensionAsync(
-                            pluginDir);
+                    try
+                    {
+                        var extensionInfo =
+                            await Browser.CoreWebView2.Profile.AddBrowserExtensionAsync(
+                                pluginDir);
 
-                    System.Diagnostics.Debug.WriteLine(
-                        $"확장 설치 완료: {extensionInfo.Name} ({Path.GetFileName(pluginDir)}, id={extensionInfo.Id})");
-                }
-                catch (Exception ex)
-                {
-                    System.Diagnostics.Debug.WriteLine(
-                        $"확장 설치 실패 ({Path.GetFileName(pluginDir)}): {ex}");
+                        System.Diagnostics.Debug.WriteLine(
+                            $"확장 설치 완료: {extensionInfo.Name} ({Path.GetFileName(pluginDir)}, id={extensionInfo.Id})");
+                    }
+                    catch (Exception ex)
+                    {
+                        System.Diagnostics.Debug.WriteLine(
+                            $"확장 설치 실패 ({Path.GetFileName(pluginDir)}): {ex}");
+                    }
                 }
             }
 
