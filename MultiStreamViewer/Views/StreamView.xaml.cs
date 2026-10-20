@@ -41,6 +41,31 @@ public partial class StreamView : UserControl
             Browser_NavigationCompleted;
     }
 
+    // 이 슬롯에 처음 연결한 주소 (연결 해제 전까지 유지)
+    public string InitialUrl => Info.Url;
+
+    // 이 슬롯이 지금 보고 있는 주소 (페이지 안에서 이동했다면 이동한 곳)
+    public string CurrentUrl
+    {
+        get
+        {
+            string? source = Browser.CoreWebView2?.Source;
+
+            return string.IsNullOrEmpty(source) || source == "about:blank"
+                ? Info.Url
+                : source;
+        }
+    }
+
+    // 슬롯 위치가 바뀌었을 때 번호와 제목 표시를 새 위치에 맞춘다.
+    public void SetSlotIndex(int slotIndex)
+    {
+        Info.SlotIndex = slotIndex;
+
+        StreamTitle.Text =
+            $"슬롯 {slotIndex + 1}";
+    }
+
     private async void StreamView_Loaded(
     object sender,
     RoutedEventArgs e)

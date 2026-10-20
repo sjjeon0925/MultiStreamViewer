@@ -1,0 +1,19 @@
+<Window x:Class="MultiStreamViewer.Views.SlotPickerWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        WindowStyle="None"
+        AllowsTransparency="True"
+        Background="Transparent"
+        ResizeMode="NoResize"
+        ShowInTaskbar="False"
+        ShowActivated="False">
+
+    <!--
+        슬롯 선택용 투명 창. WebView2는 마우스 입력을 자기가 가져가서 슬롯 위의 마우스 이동/클릭을
+        WPF가 받을 수 없으므로, 방송 영역 전체를 덮는 거의 투명한 창을 한 겹 올려서 대신 받는다.
+        슬롯 선택 모드일 때만 표시된다.
+    -->
+
+    <Canvas x:Name="Root"/>
+
+</Window>

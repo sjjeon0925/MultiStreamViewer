@@ -280,6 +280,10 @@
 
                         <ColumnDefinition Width="Auto"/>
 
+                        <ColumnDefinition Width="Auto"/>
+
+                        <ColumnDefinition Width="Auto"/>
+
                     </Grid.ColumnDefinitions>
 
 
@@ -329,6 +333,22 @@
                             Content="해제"
                             Style="{StaticResource ConnectButtonStyle}"
                             Click="DisconnectButton_Click"/>
+
+
+                    <!-- 링크 추출: 선택한 슬롯의 링크를 주소창에 채우고 클립보드에 복사 -->
+
+                    <Button Grid.Column="4"
+                            Content="현재 링크"
+                            Margin="16,0,0,0"
+                            ToolTip="선택한 슬롯이 지금 보고 있는 주소를 주소창에 채우고 복사합니다"
+                            Style="{StaticResource ConnectButtonStyle}"
+                            Click="CurrentLinkButton_Click"/>
+
+                    <Button Grid.Column="5"
+                            Content="처음 링크"
+                            ToolTip="선택한 슬롯에 처음 연결한 주소를 주소창에 채우고 복사합니다"
+                            Style="{StaticResource ConnectButtonStyle}"
+                            Click="InitialLinkButton_Click"/>
 
                 </Grid>
 
