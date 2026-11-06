@@ -48,20 +48,26 @@ dotnet run --project MultiStreamViewer/MultiStreamViewer.csproj
 
 ```
 MultiStreamViewer/
-├── MainWindow.xaml(.cs)          # 메인 창: 분할 레이아웃/모양, 전체화면, 연결·해제, 링크 추출, 오버레이 기능 연결
+├── App.xaml(.cs)                 # 공통 다크 테마 리소스 및 앱 시작점
+├── MainWindow.xaml(.cs)          # 메인 창: 상단 툴바, 오버레이/슬롯 선택 모드 조율
 ├── Views/
 │   ├── StreamView.xaml(.cs)      # 방송 1개를 표시하는 슬롯 (WebView2 래핑)
 │   ├── OverlayMenuWindow         # 방송 화면 위에 뜨는 반투명 원형 메뉴
 │   ├── SlotPickerWindow          # 슬롯을 클릭해 고르는 투명 선택 창 (위치 바꾸기, 즐겨찾기 열기)
 │   ├── FullscreenExitWindow      # 전체화면에서 화면 맨 위에 나타나는 ✕ 버튼
 │   ├── FavoritesWindow           # 즐겨찾기 목록 (추가/삭제/선택)
-│   └── WindowNative.cs           # 오버레이 창들이 공유하는 Win32 호출
+│   └── WindowNative.cs           # 오버레이 창 및 전체화면 모니터 계산이 공유하는 Win32 호출
 ├── Models/
 │   ├── StreamInfo.cs             # 슬롯별 방송 상태 모델
-│   └── Favorite.cs               # 즐겨찾기 항목
+│   ├── Favorite.cs               # 즐겨찾기 항목
+│   ├── OverlayFeature.cs         # 원형 오버레이 메뉴 기능 버튼 열거형
+│   └── StreamAlignment.cs        # 전체화면 정렬 및 슬롯 선택 모드 열거형
 ├── Services/
-│   ├── PlatformDetector.cs       # URL을 보고 플랫폼 판별
-│   └── FavoritesStore.cs         # 즐겨찾기 JSON 저장/불러오기
+│   ├── PlatformDetector.cs       # URL 정규화 및 플랫폼 판별
+│   ├── FavoritesStore.cs         # 즐겨찾기 JSON 저장/불러오기
+│   ├── WebViewHostService.cs     # 공유 WebView2 환경 초기화, 확장 설치, 치지직 권한/모달 처리
+│   ├── StreamLayoutController.cs # 1~4분할 그리드 배치, 분할 모양 전환, 전체화면 정렬 계산
+│   └── FullscreenController.cs   # 전체화면 진입 및 이전 창 상태 복원 제어
 └── Extensions/                   # WebView2에 설치되는 확장 프로그램 (네이버 영상 재생 보조, Edge용만 설치)
 ```
 

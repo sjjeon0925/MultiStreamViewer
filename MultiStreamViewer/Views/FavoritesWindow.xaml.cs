@@ -20,7 +20,6 @@ public partial class FavoritesWindow : Window
         InitializeComponent();
 
         favorites = new ObservableCollection<Favorite>(FavoritesStore.Load());
-
         FavoriteList.ItemsSource = favorites;
 
         // 상단 주소창에 입력해 둔 주소를 바로 추가할 수 있게 채워둔다.
@@ -32,7 +31,6 @@ public partial class FavoritesWindow : Window
         if (FavoriteList.SelectedItem is Favorite favorite)
         {
             Chosen = favorite;
-
             DialogResult = true;
         }
     }
@@ -42,46 +40,35 @@ public partial class FavoritesWindow : Window
         if (sender is Button { Tag: Favorite favorite })
         {
             favorites.Remove(favorite);
-
             FavoritesStore.Save(favorites);
         }
     }
 
     private void AddButton_Click(object sender, RoutedEventArgs e)
     {
-        string url = UrlBox.Text.Trim();
-
-        if (url.Length == 0)
+        string rawUrl = UrlBox.Text.Trim();
+        if (rawUrl.Length == 0)
         {
             MessageText.Text = "방송 주소를 입력하세요.";
-
             return;
         }
 
-        // 스킴 없이 입력해도 https로 보정한다.
-        if (!url.Contains("://", StringComparison.Ordinal))
-            url = "https://" + url;
-
-        if (!Uri.TryCreate(url, UriKind.Absolute, out Uri? uri) ||
-            (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
+        if (!PlatformDetector.TryNormalizeHttpUri(rawUrl, out Uri? uri, out string normalizedUrl) ||
+            uri == null)
         {
             MessageText.Text = "올바른 주소가 아닙니다.";
-
             return;
         }
 
         string name = NameBox.Text.Trim();
-
         if (name.Length == 0)
             name = uri.Host;
 
-        favorites.Add(new Favorite(name, url));
-
+        favorites.Add(new Favorite(name, normalizedUrl));
         FavoritesStore.Save(favorites);
 
         NameBox.Clear();
         UrlBox.Clear();
-
         MessageText.Text = string.Empty;
     }
 }

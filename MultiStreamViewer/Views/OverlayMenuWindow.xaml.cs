@@ -1,18 +1,19 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
-using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
+using System.Windows.Threading;
+
+using MultiStreamViewer.Models;
 
 namespace MultiStreamViewer.Views;
 
 public partial class OverlayMenuWindow : Window
 {
-    // 기능 버튼 개수 (최대 6개까지 늘려도 원형 배치가 유지된다)
     private const int FeatureCount = 4;
 
     private const double ToggleSize = 44;
@@ -29,34 +30,70 @@ public partial class OverlayMenuWindow : Window
 
     private const double WindowSize = 2 * (Radius + FeatureSize / 2 + Pad);
 
-    // 버튼 순서는 AngleOf 기준(4개: 위, 오른쪽, 아래, 왼쪽)이며 아이콘과 툴팁만 먼저 붙여둔 상태다.
-    private static readonly (string Icon, string Tip)[] FeatureLabels =
+    // 접힌 상태에서 토글 주변 몇 DIP 안으로 들어오면 나타날지
+    private const double ShowZoneRadius = ToggleSize / 2 + 20;
+
+    // 펼친 상태에서 버튼 바깥으로 이만큼 벗어나면 사라진다
+    private const double ExpandedZoneRadius = Radius + FeatureSize / 2 + 12;
+
+    // 커서가 벗어난 뒤 이 횟수(×80ms)만큼 연속으로 밖에 있어야 사라진다 (깜빡임 방지)
+    private const int HideDelayTicks = 5;
+
+    // 버튼 순서는 OverlayFeature 열거형(위, 오른쪽, 아래, 왼쪽)과 일치한다.
+    private static readonly (string Icon, string Tip)[] DefaultFeatureLabels =
     {
-        ("★", "즐겨찾기"),            // 위     - 4번
-        ("↕", "전체화면 정렬"),        // 오른쪽 - 1번 (위/가운데/아래)
-        ("⇄", "슬롯 위치 바꾸기"),     // 아래   - 2번
-        ("◫", "분할 화면 모양")        // 왼쪽   - 5번
+        ("★", "즐겨찾기"),        // OverlayFeature.Favorites (위)
+        ("↕", "전체화면 정렬"),   // OverlayFeature.Align (오른쪽)
+        ("⇄", "슬롯 위치 바꾸기"), // OverlayFeature.Swap (아래)
+        ("◫", "분할 화면 모양")   // OverlayFeature.Shape (왼쪽)
     };
 
     private readonly List<Button> featureButtons = new();
 
-    private bool isExpanded;
-
-    // 나중에 각 기능을 연결할 때 사용하는 버튼 목록 (배치 순서는 AngleOf 참고)
-    // 기능 버튼을 눌렀을 때 (인덱스는 FeatureButtons 순서)
-    public event Action<int>? FeatureClicked;
-
-    // 버튼 모양(아이콘/툴팁)을 상태에 맞게 바꾼다.
-    public void SetFeatureLabel(int index, string icon, string tip)
+    private readonly DispatcherTimer hoverTimer = new()
     {
+        Interval = TimeSpan.FromMilliseconds(80)
+    };
+
+    private bool isExpanded;
+    private bool isShown;
+    private bool isPinned;
+    private int outsideTicks;
+
+    public event Action<OverlayFeature>? FeatureClicked;
+
+    public ReadOnlyCollection<Button> FeatureButtons => featureButtons.AsReadOnly();
+
+    public OverlayMenuWindow()
+    {
+        InitializeComponent();
+
+        Width = WindowSize;
+        Height = WindowSize;
+
+        BuildButtons();
+        StartHoverWatch();
+
+        Closed += (_, _) => hoverTimer.Stop();
+    }
+
+    public void SetFeatureLabel(OverlayFeature feature, string icon, string tip)
+    {
+        int index = (int)feature;
+        if (index < 0 || index >= featureButtons.Count)
+            return;
+
         featureButtons[index].Content = icon;
         featureButtons[index].ToolTip = tip;
     }
 
-    // 기능 버튼 원래 아이콘/툴팁으로 되돌린다.
-    public void ResetFeatureLabel(int index)
+    public void ResetFeatureLabel(OverlayFeature feature)
     {
-        SetFeatureLabel(index, FeatureLabels[index].Icon, FeatureLabels[index].Tip);
+        int index = (int)feature;
+        if (index < 0 || index >= DefaultFeatureLabels.Length)
+            return;
+
+        SetFeatureLabel(feature, DefaultFeatureLabels[index].Icon, DefaultFeatureLabels[index].Tip);
     }
 
     // true면 메뉴를 펼친 채 고정해서 보여주고, false면 다시 마우스 위치에 따라 숨는다.
@@ -71,7 +108,6 @@ public partial class OverlayMenuWindow : Window
         }
     }
 
-    // 기능 버튼을 접는다 (가운데 토글만 남는다).
     public void Collapse()
     {
         SetExpanded(false);
@@ -90,30 +126,43 @@ public partial class OverlayMenuWindow : Window
             new WindowInteropHelper(owner).Handle);
     }
 
-    public ReadOnlyCollection<Button> FeatureButtons => featureButtons.AsReadOnly();
-
-    public OverlayMenuWindow()
+    protected override void OnSourceInitialized(EventArgs e)
     {
-        InitializeComponent();
+        base.OnSourceInitialized(e);
 
-        Width = WindowSize;
-        Height = WindowSize;
+        WindowNative.SetNoActivate(new WindowInteropHelper(this).Handle);
+    }
 
-        BuildButtons();
+    // streamAreaPx: 방송 영역의 화면 좌표(물리 픽셀)
+    // 1분할은 오른쪽 중앙, 2~4분할은 정중앙에 둔다.
+    public void Reposition(Rect streamAreaPx, int layout)
+    {
+        IntPtr hwnd = new WindowInteropHelper(this).Handle;
+        if (hwnd == IntPtr.Zero)
+            return;
 
-        StartHoverWatch();
+        DpiScale dpi = VisualTreeHelper.GetDpi(this);
+
+        double width = Width * dpi.DpiScaleX;
+        double height = Height * dpi.DpiScaleY;
+
+        double x = layout == 1
+            ? streamAreaPx.Right - width - EdgeMargin * dpi.DpiScaleX
+            : streamAreaPx.Left + (streamAreaPx.Width - width) / 2;
+
+        double y = streamAreaPx.Top + (streamAreaPx.Height - height) / 2;
+
+        WindowNative.SetBounds(hwnd, new Rect(x, y, width, height));
     }
 
     private void BuildButtons()
     {
         double center = WindowSize / 2;
-
         var style = (Style)FindResource("OverlayButtonStyle");
 
         for (int i = 0; i < FeatureCount; i++)
         {
             double angle = AngleOf(i);
-
             double dx = Radius * Math.Cos(angle);
             double dy = Radius * Math.Sin(angle);
 
@@ -122,18 +171,16 @@ public partial class OverlayMenuWindow : Window
                 Width = FeatureSize,
                 Height = FeatureSize,
                 Style = style,
-                Content = i < FeatureLabels.Length ? FeatureLabels[i].Icon : null,
-                ToolTip = i < FeatureLabels.Length ? FeatureLabels[i].Tip : null,
+                Content = i < DefaultFeatureLabels.Length ? DefaultFeatureLabels[i].Icon : null,
+                ToolTip = i < DefaultFeatureLabels.Length ? DefaultFeatureLabels[i].Tip : null,
                 FontFamily = new FontFamily("Segoe UI Symbol"),
                 Visibility = Visibility.Collapsed,
-                // 접힌 상태에서는 토글 위치(중심)에서 출발한다.
                 RenderTransform = new TranslateTransform(-dx, -dy),
                 Tag = new Point(dx, dy)
             };
 
-            int index = i;
-
-            button.Click += (_, _) => FeatureClicked?.Invoke(index);
+            OverlayFeature feature = (OverlayFeature)i;
+            button.Click += (_, _) => FeatureClicked?.Invoke(feature);
 
             Canvas.SetLeft(button, center + dx - FeatureSize / 2);
             Canvas.SetTop(button, center + dy - FeatureSize / 2);
@@ -142,7 +189,6 @@ public partial class OverlayMenuWindow : Window
             featureButtons.Add(button);
         }
 
-        // 토글은 나중에 추가해 기능 버튼보다 위에 그려진다.
         var toggle = new Button
         {
             Width = ToggleSize,
@@ -160,94 +206,17 @@ public partial class OverlayMenuWindow : Window
         Root.Children.Add(toggle);
     }
 
-    // 4개: 위/오른쪽/아래/왼쪽 (12시부터 시계 방향)
-    // 6개: 오른쪽에서 시작해 60°씩 시계 방향 (좌우 1개씩, 나머지는 위아래로 2개씩)
-    // 그 외 개수: 위쪽(12시)에서 시계 방향으로 균등 배치
     private static double AngleOf(int index)
     {
-        double degrees =
-            FeatureCount switch
-            {
-                4 => -90 + 90 * index,
-                6 => 60 * index,
-                _ => -90 + 360.0 / FeatureCount * index
-            };
+        double degrees = FeatureCount switch
+        {
+            4 => -90 + 90 * index,
+            6 => 60 * index,
+            _ => -90 + 360.0 / FeatureCount * index
+        };
 
         return degrees * Math.PI / 180;
     }
-
-    protected override void OnSourceInitialized(EventArgs e)
-    {
-        base.OnSourceInitialized(e);
-
-        // 클릭해도 활성화되지 않게 해서, 메인 창이 포커스를 유지하도록 한다 (Esc 전체화면 해제 유지).
-        IntPtr hwnd = new WindowInteropHelper(this).Handle;
-
-        int exStyle = GetWindowLong(hwnd, GWL_EXSTYLE);
-
-        SetWindowLong(
-            hwnd,
-            GWL_EXSTYLE,
-            exStyle | WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW);
-    }
-
-    // streamAreaPx: 방송 영역의 화면 좌표(물리 픽셀)
-    // 1분할은 오른쪽 중앙, 2~4분할은 정중앙에 둔다.
-    public void Reposition(Rect streamAreaPx, int layout)
-    {
-        IntPtr hwnd = new WindowInteropHelper(this).Handle;
-
-        if (hwnd == IntPtr.Zero)
-            return;
-
-        DpiScale dpi = VisualTreeHelper.GetDpi(this);
-
-        double width = Width * dpi.DpiScaleX;
-        double height = Height * dpi.DpiScaleY;
-
-        double x = layout == 1
-            ? streamAreaPx.Right - width - EdgeMargin * dpi.DpiScaleX
-            : streamAreaPx.Left + (streamAreaPx.Width - width) / 2;
-
-        double y = streamAreaPx.Top + (streamAreaPx.Height - height) / 2;
-
-        SetWindowPos(
-            hwnd,
-            IntPtr.Zero,
-            (int)Math.Round(x),
-            (int)Math.Round(y),
-            (int)Math.Round(width),
-            (int)Math.Round(height),
-            SWP_NOZORDER | SWP_NOACTIVATE);
-    }
-
-    // =========================================================
-    // 마우스가 메뉴 근처에 있을 때만 보이게 한다.
-    //
-    // 안 보이는 동안(투명)에는 이 창이 마우스 이벤트를 받지 못하므로
-    // 커서 위치를 주기적으로 직접 확인한다.
-    // =========================================================
-
-    // 접힌 상태에서 토글 주변 몇 DIP 안으로 들어오면 나타날지
-    private const double ShowZoneRadius = ToggleSize / 2 + 20;
-
-    // 펼친 상태에서 버튼 바깥으로 이만큼 벗어나면 사라진다
-    private const double ExpandedZoneRadius = Radius + FeatureSize / 2 + 12;
-
-    // 커서가 벗어난 뒤 이 횟수(×80ms)만큼 연속으로 밖에 있어야 사라진다 (깜빡임 방지)
-    private const int HideDelayTicks = 5;
-
-    private readonly System.Windows.Threading.DispatcherTimer hoverTimer = new()
-    {
-        Interval = TimeSpan.FromMilliseconds(80)
-    };
-
-    private bool isShown;
-
-    // 슬롯 선택 같은 모드 중에는 마우스가 멀어져도 메뉴를 펼친 채로 계속 보여준다.
-    private bool isPinned;
-
-    private int outsideTicks;
 
     private void StartHoverWatch()
     {
@@ -263,38 +232,32 @@ public partial class OverlayMenuWindow : Window
         if (isPinned)
         {
             outsideTicks = 0;
-
             SetShown(true);
-
             return;
         }
 
         IntPtr hwnd = new WindowInteropHelper(this).Handle;
-
         if (hwnd == IntPtr.Zero ||
-            !GetCursorPos(out POINT cursor) ||
-            !GetWindowRect(hwnd, out RECT rect))
+            !WindowNative.TryGetCursor(out Point cursor) ||
+            !WindowNative.TryGetWindowBounds(hwnd, out Rect windowBounds))
         {
             return;
         }
 
         DpiScale dpi = VisualTreeHelper.GetDpi(this);
 
-        double centerX = (rect.Left + rect.Right) / 2.0;
-        double centerY = (rect.Top + rect.Bottom) / 2.0;
+        double centerX = windowBounds.Left + windowBounds.Width / 2.0;
+        double centerY = windowBounds.Top + windowBounds.Height / 2.0;
 
-        double distance =
-            Math.Sqrt(
-                Math.Pow(cursor.X - centerX, 2) +
-                Math.Pow(cursor.Y - centerY, 2));
+        double distance = Math.Sqrt(
+            Math.Pow(cursor.X - centerX, 2) +
+            Math.Pow(cursor.Y - centerY, 2));
 
-        double zone =
-            (isExpanded ? ExpandedZoneRadius : ShowZoneRadius) * dpi.DpiScaleX;
+        double zone = (isExpanded ? ExpandedZoneRadius : ShowZoneRadius) * dpi.DpiScaleX;
 
         if (distance <= zone)
         {
             outsideTicks = 0;
-
             SetShown(true);
         }
         else if (isShown && ++outsideTicks >= HideDelayTicks)
@@ -312,7 +275,6 @@ public partial class OverlayMenuWindow : Window
             return;
 
         isShown = shown;
-
         Root.IsHitTestVisible = shown;
 
         Root.BeginAnimation(
@@ -341,13 +303,11 @@ public partial class OverlayMenuWindow : Window
             {
                 button.Visibility = Visibility.Visible;
 
-                // 토글 위치에서 제자리로 튀어나온다.
                 Animate(transform, TranslateTransform.XProperty, -offset.X, 0, null);
                 Animate(transform, TranslateTransform.YProperty, -offset.Y, 0, null);
             }
             else
             {
-                // 토글 위치로 빨려 들어간 뒤 숨긴다.
                 Animate(transform, TranslateTransform.XProperty, 0, -offset.X, null);
                 Animate(
                     transform,
@@ -380,43 +340,4 @@ public partial class OverlayMenuWindow : Window
 
         transform.BeginAnimation(property, animation);
     }
-
-    private const int GWL_EXSTYLE = -20;
-    private const int WS_EX_NOACTIVATE = 0x08000000;
-    private const int WS_EX_TOOLWINDOW = 0x00000080;
-
-    private const uint SWP_NOZORDER = 0x0004;
-    private const uint SWP_NOACTIVATE = 0x0010;
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct POINT
-    {
-        public int X;
-        public int Y;
-    }
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct RECT
-    {
-        public int Left;
-        public int Top;
-        public int Right;
-        public int Bottom;
-    }
-
-    [DllImport("user32.dll")]
-    private static extern bool GetCursorPos(out POINT lpPoint);
-
-    [DllImport("user32.dll")]
-    private static extern bool GetWindowRect(IntPtr hWnd, out RECT lpRect);
-
-    [DllImport("user32.dll")]
-    private static extern int GetWindowLong(IntPtr hWnd, int nIndex);
-
-    [DllImport("user32.dll")]
-    private static extern int SetWindowLong(IntPtr hWnd, int nIndex, int dwNewLong);
-
-    [DllImport("user32.dll")]
-    private static extern bool SetWindowPos(
-        IntPtr hWnd, IntPtr hWndInsertAfter, int x, int y, int cx, int cy, uint uFlags);
 }

@@ -26,9 +26,7 @@ public partial class FullscreenExitWindow : Window
     };
 
     private bool isShown;
-
     private int outsideTicks;
-
     private Rect lastBounds;
 
     // 전체화면 종료 요청 (✕ 클릭)
@@ -39,10 +37,10 @@ public partial class FullscreenExitWindow : Window
         InitializeComponent();
 
         mainWindow = owner;
-
         Owner = owner;
 
         timer.Tick += (_, _) => UpdateState();
+        Closed += (_, _) => timer.Stop();
     }
 
     protected override void OnSourceInitialized(EventArgs e)
@@ -56,9 +54,7 @@ public partial class FullscreenExitWindow : Window
     public void Begin()
     {
         SetShown(false, animate: false);
-
         Show();
-
         timer.Start();
     }
 
@@ -66,9 +62,7 @@ public partial class FullscreenExitWindow : Window
     public void End()
     {
         timer.Stop();
-
         SetShown(false, animate: false);
-
         Hide();
     }
 
@@ -97,7 +91,6 @@ public partial class FullscreenExitWindow : Window
         if (bounds != lastBounds)
         {
             WindowNative.SetBounds(hwnd, bounds);
-
             lastBounds = bounds;
         }
 
@@ -121,7 +114,6 @@ public partial class FullscreenExitWindow : Window
         if (nearTop || (isShown && overButton))
         {
             outsideTicks = 0;
-
             SetShown(true, animate: true);
         }
         else if (isShown && ++outsideTicks >= HideDelayTicks)
@@ -136,7 +128,6 @@ public partial class FullscreenExitWindow : Window
             return;
 
         isShown = shown;
-
         ExitButton.IsHitTestVisible = shown;
 
         double y = shown ? 0 : -Height;
@@ -149,7 +140,6 @@ public partial class FullscreenExitWindow : Window
 
             Slide.Y = y;
             Pill.Opacity = opacity;
-
             return;
         }
 
